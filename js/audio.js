@@ -2,8 +2,8 @@
 
 // Filter configuration with wider frequency range
 const filterSettings = {
-    lowCutoff: 40,     // Lower cutoff frequency (Hz) - preserves more heart sound detail
-    highCutoff: 400,  // Higher cutoff frequency (Hz) - captures murmurs better
+    lowCutoff: 0,     // Lower cutoff frequency (Hz) - preserves more heart sound detail
+    highCutoff: 80,  // Higher cutoff frequency (Hz) - captures murmurs better
     sampleRate: 16000  // Sample rate (Hz)
 };
 

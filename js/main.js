@@ -5,9 +5,6 @@ function addDarkmodeWidget() {
 window.addEventListener('load', addDarkmodeWidget);
 
 // DOM elements
-// In main.js (top of file)
-window.currentVolume = 1.0;
-window.useFilter = true;
 const connectBtn = document.getElementById("connectBtn");
 const pauseBtn = document.getElementById("pauseBtn");
 const continueBtn = document.getElementById("continueBtn");
