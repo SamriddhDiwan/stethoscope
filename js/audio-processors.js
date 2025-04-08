@@ -2,8 +2,8 @@
 class HeartSoundFilter {
     constructor() {
         this.settings = {
-            lowCutoff: 25,
-            highCutoff: 150,
+            lowCutoff: 50,
+            highCutoff: 500,
             sampleRate: 16000
         };
         this.reset();
@@ -92,7 +92,6 @@ class HarmonicEnhancer {
             const distorted = Math.tanh(sample * 1.5) * 32768 * this.gain;
             output[i] = Math.max(-32768, Math.min(32767, distorted));
         }
-        console.log(output);
         return output;
     }
 }
