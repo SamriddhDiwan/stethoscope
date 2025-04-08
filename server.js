@@ -30,11 +30,14 @@ wsServer.on("connection", (ws, req) => {
 });
 
 // HTTP stuff
-app.use("/image", express.static("image"));
-app.use("/js", express.static("js"));
-app.get("/audio", (req, res) =>
-  res.sendFile(path.resolve(__dirname, "./audio_client.html"))
+app.use(express.static(path.join(__dirname))); // Serve all static files from root
+app.use("/js", express.static(path.join(__dirname, "js"))); // Also serve JS files from /js
+app.use("/css", express.static(path.join(__dirname, "css"))); // Serve CSS files from /css
+
+app.get("/", (req, res) =>
+  res.sendFile(path.resolve(__dirname, "./audio_client.html")) // Changed from audio_client.html to index.html
 );
+
 app.listen(HTTP_PORT, () =>
   console.log(`HTTP server listening at http://localhost:${HTTP_PORT}`)
 );
