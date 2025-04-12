@@ -35,7 +35,7 @@ app.use("/js", express.static(path.join(__dirname, "js"))); // Also serve JS fil
 app.use("/css", express.static(path.join(__dirname, "css"))); // Serve CSS files from /css
 
 app.get("/", (req, res) =>
-  res.sendFile(path.resolve(__dirname, "./audio_client.html")) // Changed from audio_client.html to index.html
+  res.sendFile(path.resolve(__dirname, "./index.html")) // Changed from audio_client.html to index.html
 );
 
 app.listen(HTTP_PORT, () =>

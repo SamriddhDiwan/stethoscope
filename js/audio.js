@@ -1,9 +1,21 @@
-// audio.js - Enhanced Heart Sound Audio Processor
+// audio.js - Enhanced Heart Sound Audio Processor with Heart Rate Detection
 
 const filterSettings = {
     lowCutoff: 20,   // Slightly above 0 to avoid instability
     highCutoff: 50,
     sampleRate: 16000
+};
+
+
+
+// Heart rate detection settings
+const heartRateDetector = {
+    threshold: 5000,           // Amplitude threshold for peak detection (adjust based on your signal strength)
+    minTimeBetweenBeats: 300,  // Minimum time (ms) between beats (prevents detecting the same beat twice)
+    recentPeaks: [],           // Store timestamps of recent peaks
+    lastPeakTime: 0,           // Last detected peak time
+    samplesSinceLastPeak: 0,   // Counter for samples since last peak
+    currentHeartRate: 0        // Current calculated heart rate in BPM
 };
 
 // Advanced IIR Filter implementation
@@ -102,14 +114,93 @@ function applyVolume(inputArray, volume) {
     return output;
 }
 
+// Heart rate detection function
+function detectHeartRate(audioData) {
+    const samples = new Int16Array(audioData);
+    const sampleRate = filterSettings.sampleRate;
+    let peakDetected = false;
+    
+    // Use a sliding window approach to find peaks
+    const windowSize = 32; // Adjust based on your needs
+    
+    for (let i = windowSize; i < samples.length - windowSize; i++) {
+        // Check if current sample is a local maximum
+        let isPeak = true;
+        for (let j = i - windowSize; j <= i + windowSize; j++) {
+            if (j !== i && samples[j] >= samples[i]) {
+                isPeak = false;
+                break;
+            }
+        }
+        
+        // Check if the peak is above threshold
+        if (isPeak && Math.abs(samples[i]) > heartRateDetector.threshold) {
+            const currentTime = Date.now();
+            const timeSinceLastPeak = currentTime - heartRateDetector.lastPeakTime;
+            
+            // Only count it if it's not too close to the previous peak
+            if (timeSinceLastPeak > heartRateDetector.minTimeBetweenBeats) {
+                heartRateDetector.recentPeaks.push(currentTime);
+                heartRateDetector.lastPeakTime = currentTime;
+                peakDetected = true;
+                
+                // Keep only recent peaks (last 10 seconds)
+                const cutoffTime = currentTime - 10000;
+                heartRateDetector.recentPeaks = heartRateDetector.recentPeaks.filter(time => time > cutoffTime);
+                
+                // Calculate heart rate
+                calculateHeartRate();
+                
+                // Break after finding a peak in this buffer
+                break;
+            }
+        }
+    }
+    
+    // Log heart rate if a peak was detected and we updated the calculation
+    if (peakDetected) {
+        console.log(`Heart Rate: ${heartRateDetector.currentHeartRate} BPM`);
+    }
+    
+    return peakDetected;
+}
 
+// Calculate heart rate based on recent peaks
+function calculateHeartRate() {
+    const peaks = heartRateDetector.recentPeaks;
+    
+    if (peaks.length >= 2) {
+        const timeSpan = peaks[peaks.length - 1] - peaks[0]; // ms
+        const numBeats = peaks.length - 1;
+        
+        if (timeSpan > 0) {
+            // Calculate beats per minute
+            heartRateDetector.currentHeartRate = Math.round((numBeats / timeSpan) * 60000);
+            
+            // Sanity check - heart rates are typically between 40-200 BPM
+            if (heartRateDetector.currentHeartRate < 40 || heartRateDetector.currentHeartRate > 200) {
+                // Likely a detection error, so don't update
+                return false;
+            }
+            
+            return true;
+        }
+    }
+    
+    return false;
+}
 
 // Main audio processing pipeline
 function processAudioData(rawData) {
     try {
         const int16Data = new Int16Array(rawData);
         let processedData = useFilter ? applyBandpassFilter(int16Data) : int16Data;
-        return applyVolume(processedData, currentVolume).buffer;
+        const volumeAdjusted = applyVolume(processedData, currentVolume);
+        
+        // Detect heart rate from processed audio data
+        detectHeartRate(volumeAdjusted);
+        
+        return volumeAdjusted.buffer;
     } catch (error) {
         console.error("Audio processing error:", error);
         updateStatus?.(`Audio error: ${error.message}`, 'error');
@@ -139,6 +230,14 @@ function plotFrequencyResponse() {
     return { frequencies, magnitudes };
 }
 
+// Reset heart rate detector
+function resetHeartRateDetector() {
+    heartRateDetector.recentPeaks = [];
+    heartRateDetector.lastPeakTime = 0;
+    heartRateDetector.samplesSinceLastPeak = 0;
+    heartRateDetector.currentHeartRate = 0;
+}
+
 // Export (if used as a module)
 if (typeof module !== 'undefined') {
     module.exports = {
@@ -147,6 +246,8 @@ if (typeof module !== 'undefined') {
         plotFrequencyResponse,
         applyVolume,
         applyBandpassFilter,
-        heartSoundFilter
+        heartSoundFilter,
+        detectHeartRate,
+        resetHeartRateDetector
     };
 }
