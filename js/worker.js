@@ -1,7 +1,7 @@
 // worker.js
 self.addEventListener('message', function (e) {
    var mean = 0;
-   var samples_read = e.data.byteLength / 8;
+   var samples_read = e.data.byteLength / 2;
     if (samples_read > 0) {
 
         var byteArray = new Int16Array(e.data);

@@ -50,6 +50,8 @@ function stopRecording() {
         uploadBtn.style.display = 'inline-block';
 
         updateStatus(`Recording complete! Size: ${formatBytes(wavBlob.size)}`, 'success');
+        sendToAnalysis(wavBlob);
+
     } catch (error) {
         updateStatus(`Error creating WAV file: ${error}`, 'error');
     }
@@ -109,6 +111,28 @@ function createWavBlob(chunks, channels, sampleRate) {
     });
 
     return new Blob([merged], { type: 'audio/wav' });
+}
+function sendToAnalysis(wavBlob) {
+    const formData = new FormData();
+    formData.append('file', wavBlob, 'recording.wav');
+
+    updateStatus("Sending for heart rate analysis...", 'recording');
+
+    fetch('http://localhost:5000/analyze', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.heart_rate_bpm) {
+            updateStatus(`❤️ Heart Rate: ${data.heart_rate_bpm} BPM`, 'success');
+        } else {
+            updateStatus(`⚠️ Analysis Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(err => {
+        updateStatus(`❌ Analysis Failed: ${err.message}`, 'error');
+    });
 }
 
 function writeString(view, offset, string) {
