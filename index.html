@@ -197,7 +197,7 @@
                         this.bpm = Math.round(60000 / avgInterval); // Convert to BPM (60000 ms / interval)
                         
                         // Reasonable BPM range check (40-200)
-                        if (this.bpm >= 40 && this.bpm <= 200) {
+                        if (this.bpm >= 60 && this.bpm <= 120) {
                             bpmDisplay.textContent = `Heart Rate: ${this.bpm} BPM`;
                         }
                     }
@@ -415,7 +415,7 @@
         }
         const filterSettings = {
             lowCutoff: 20,
-            highCutoff: 55,
+            highCutoff: 50,
             sampleRate: 16000
         };
         class HeartSoundFilter {
