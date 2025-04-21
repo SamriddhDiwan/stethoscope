@@ -450,79 +450,112 @@
         }
 
         const filterSettings = {
-            lowCutoff: 20,
-            highCutoff: 37,
-            sampleRate: 16000
-        };
-        class HeartSoundFilter {
-            constructor() {
-                this.reset();
-                this.calculateCoefficients();
-            }
+    lowCutoff: 20,
+    highCutoff: 65,
+    sampleRate: 16000
+};
 
-            reset() {
-                this.x1 = 0; this.x2 = 0;
-                this.y1 = 0; this.y2 = 0;
-            }
+class BiquadFilter {
+    constructor() {
+        this.reset();
+    }
 
-            calculateCoefficients() {
-                const { lowCutoff, highCutoff, sampleRate } = filterSettings;
-                const nyquist = sampleRate / 2;
-                const low = lowCutoff / nyquist;
-                const high = highCutoff / nyquist;
-                const omega = Math.PI * (high + low);
-                const bandwidth = Math.PI * (high - low);
-                const alpha = Math.sin(bandwidth) / (2 * Math.SQRT2);
-                const cos_omega = Math.cos(omega);
+    reset() {
+        this.x1 = 0; this.x2 = 0;
+        this.y1 = 0; this.y2 = 0;
+    }
 
-                const b0 = alpha;
-                const b1 = 0;
-                const b2 = -alpha;
-                const a0 = 1 + alpha;
-                const a1 = -2 * cos_omega;
-                const a2 = 1 - alpha;
+    setCoefficients(b0, b1, b2, a0, a1, a2) {
+        // Normalize coefficients by a0
+        this.b0 = b0 / a0;
+        this.b1 = b1 / a0;
+        this.b2 = b2 / a0;
+        this.a1 = a1 / a0;
+        this.a2 = a2 / a0;
+    }
 
-                this.b0 = b0 / a0;
-                this.b1 = b1 / a0;
-                this.b2 = b2 / a0;
-                this.a0 = 1;
-                this.a1 = a1 / a0;
-                this.a2 = a2 / a0;
-            }
+    processSample(input) {
+        const output = this.b0 * input +
+                     this.b1 * this.x1 +
+                     this.b2 * this.x2 -
+                     this.a1 * this.y1 -
+                     this.a2 * this.y2;
 
-            processSample(input) {
-                const output = this.b0 * input +
-                    this.b1 * this.x1 +
-                    this.b2 * this.x2 -
-                    this.a1 * this.y1 -
-                    this.a2 * this.y2;
+        this.x2 = this.x1;
+        this.x1 = input;
+        this.y2 = this.y1;
+        this.y1 = output;
 
-                this.x2 = this.x1;
-                this.x1 = input;
-                this.y2 = this.y1;
-                this.y1 = output;
+        return output;
+    }
+}
 
-                return Math.max(-32768, Math.min(32767, output));
-            }
+class FourthOrderBandpassFilter {
+    constructor() {
+        this.stage1 = new BiquadFilter();
+        this.stage2 = new BiquadFilter();
+        this.calculateCoefficients();
+    }
 
-            processBuffer(inputArray) {
-                const output = new Int16Array(inputArray.length);
-                for (let i = 0; i < inputArray.length; i++) {
-                    output[i] = this.processSample(inputArray[i]);
-                }
-                return output;
-            }
+    reset() {
+        this.stage1.reset();
+        this.stage2.reset();
+    }
+
+    calculateCoefficients() {
+        const { lowCutoff, highCutoff, sampleRate } = filterSettings;
+        const nyquist = sampleRate / 2;
+        const low = lowCutoff / nyquist;
+        const high = highCutoff / nyquist;
+        const omega = Math.PI * (high + low);
+        const bandwidth = Math.PI * (high - low);
+        
+        // For fourth-order, we use a slightly different Q calculation
+        const Q = Math.sqrt(high * low) / (high - low);
+        const alpha = Math.sin(bandwidth) / (2 * Q);
+
+        const cos_omega = Math.cos(omega);
+
+        // Same coefficients for both stages (identical biquads)
+        const b0 = alpha;
+        const b1 = 0;
+        const b2 = -alpha;
+        const a0 = 1 + alpha;
+        const a1 = -2 * cos_omega;
+        const a2 = 1 - alpha;
+
+        this.stage1.setCoefficients(b0, b1, b2, a0, a1, a2);
+        this.stage2.setCoefficients(b0, b1, b2, a0, a1, a2);
+    }
+
+    processSample(input) {
+        // Cascade two biquad stages
+        const stage1Out = this.stage1.processSample(input);
+        const stage2Out = this.stage2.processSample(stage1Out);
+        
+        // Clamp to 16-bit range if needed
+        return Math.max(-32768, Math.min(32767, stage2Out));
+    }
+
+    processBuffer(inputArray) {
+        const output = new Int16Array(inputArray.length);
+        for (let i = 0; i < inputArray.length; i++) {
+            output[i] = this.processSample(inputArray[i]);
         }
-        const heartSoundFilter = new HeartSoundFilter();
-        function resetFilterState() {
-            heartSoundFilter.reset();
-        }
+        return output;
+    }
+}
 
-        function applyBandpassFilter(inputArray) {
-            // Convert ArrayBuffer to Int16Array if needed
-            const data = inputArray instanceof ArrayBuffer ? new Int16Array(inputArray) : inputArray;
-            return heartSoundFilter.processBuffer(data);
-        }
+const heartSoundFilter = new FourthOrderBandpassFilter();
+
+function resetFilterState() {
+    heartSoundFilter.reset();
+}
+
+function applyBandpassFilter(inputArray) {
+    const data = inputArray instanceof ArrayBuffer ? new Int16Array(inputArray) : inputArray;
+    return heartSoundFilter.processBuffer(data);
+}
         function applyVolume(inputArray, volume) {
             const output = new Int16Array(inputArray.length);
             const rampSamples = Math.min(100, inputArray.length);
