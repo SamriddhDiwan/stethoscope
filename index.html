@@ -51,10 +51,14 @@
     <button id="recordBtn" class="button" onclick="startRecording()">Record 10 Seconds</button>
     <a id="downloadLink" style="display:none">Download Recording</a>
     <button id="uploadBtn" class="button" style="display:none" onclick="uploadToCloud()">Upload to Cloud</button>
-    
+    <div id="patientForm" style="margin: 20px 0;">
+        <label for="patientName">Patient Name:</label>
+        <input type="text" id="patientName" placeholder="Enter patient name">
+        <button id="savePatientBtn" class="button" onclick="savePatientName()">Save Name</button>
+    </div>
     <!-- BPM Display -->
     <div id="bpmDisplay">Heart Rate: -- BPM</div>
-    
+
     <div id="graph"></div>
     <script>
         function addDarkmodeWidget() {
@@ -85,7 +89,7 @@
         var uploadBtn = document.getElementById("uploadBtn");
         var filter = document.getElementById("filterEnable");
         var bpmDisplay = document.getElementById("bpmDisplay");
-        
+
         // Recording variables
         let recordedChunks = [];
         let isRecording = false;
@@ -94,12 +98,16 @@
         let ws; // Make WebSocket connection global
         let useFilter = false; // Global flag for filter state
         let currentVolume = 1.0; // Default volume
-        
+        let currentPatientName = '';
         // Initialize button states
         connectBtn.disabled = false;
         pauseBtn.disabled = true;
         continueBtn.disabled = true;
         recordBtn.disabled = true;
+
+        function savePatientName() {
+            currentPatientName = document.getElementById('patientName').value.trim();
+        }
 
         // BPM detection variables
         const heartRateDetector = {
@@ -110,33 +118,33 @@
             lastPeakTime: 0,
             minTimeBetweenPeaks: 600, // Minimum ms between peaks (prevents multiple detections)
             bpm: 0,
-            
-            init: function() {
+
+            init: function () {
                 this.buffer = new Array(this.bufferSize).fill(0);
                 this.peaks = [];
                 this.lastPeakTime = 0;
                 this.bpm = 0;
             },
-            
-            addSamples: function(samples) {
+
+            addSamples: function (samples) {
                 // Add new samples to buffer, removing oldest
                 for (let i = 0; i < samples.length; i++) {
                     this.buffer.shift();
                     this.buffer.push(samples[i]);
                 }
-                
+
                 this.detectPeaks();
                 this.calculateBPM();
             },
-            
-            detectPeaks: function() {
+
+            detectPeaks: function () {
                 const currentTime = Date.now();
                 // Only check for peaks if enough time has passed since last peak
                 if (currentTime - this.lastPeakTime < this.minTimeBetweenPeaks) return;
-                
+
                 // Check the most recent 1/4 of the buffer for peaks
                 const checkStartIdx = Math.floor(this.buffer.length * 0.75);
-                
+
                 // Find highest value in check window
                 let max = 0;
                 let maxIdx = 0;
@@ -147,26 +155,26 @@
                         maxIdx = i;
                     }
                 }
-                
+
                 // If max exceeds threshold and is local maximum, count as peak
                 console.log(max);
                 if (max > this.peakThreshold) {
                     // Check if it's a local maximum
                     const windowSize = 50; // Check 50 samples around the peak
                     let isLocalMax = true;
-                    
-                    for (let i = Math.max(checkStartIdx, maxIdx - windowSize); 
-                         i < Math.min(this.buffer.length, maxIdx + windowSize); i++) {
+
+                    for (let i = Math.max(checkStartIdx, maxIdx - windowSize);
+                        i < Math.min(this.buffer.length, maxIdx + windowSize); i++) {
                         if (i !== maxIdx && Math.abs(this.buffer[i]) > max) {
                             isLocalMax = false;
                             break;
                         }
                     }
-                    
+
                     if (isLocalMax) {
                         this.peaks.push(currentTime);
                         this.lastPeakTime = currentTime;
-                        
+
                         // Keep only last 10 peaks for BPM calculation
                         if (this.peaks.length > 10) {
                             this.peaks.shift();
@@ -174,16 +182,16 @@
                     }
                 }
             },
-            
-            calculateBPM: function() {
+
+            calculateBPM: function () {
                 if (this.peaks.length < 2) return;
-                
+
                 // Calculate intervals between peaks
                 const intervals = [];
                 for (let i = 1; i < this.peaks.length; i++) {
                     intervals.push(this.peaks[i] - this.peaks[i - 1]);
                 }
-                
+
                 // Remove outliers (intervals that differ too much from median)
                 if (intervals.length > 3) {
                     intervals.sort((a, b) => a - b);
@@ -191,11 +199,11 @@
                     const validIntervals = intervals.filter(
                         interval => interval > median * 0.5 && interval < median * 1.5
                     );
-                    
+
                     if (validIntervals.length > 0) {
                         const avgInterval = validIntervals.reduce((sum, val) => sum + val, 0) / validIntervals.length;
                         this.bpm = Math.round(60000 / avgInterval); // Convert to BPM (60000 ms / interval)
-                        
+
                         // Reasonable BPM range check (40-200)
                         if (this.bpm >= 60 && this.bpm <= 120) {
                             bpmDisplay.textContent = `Heart Rate: ${this.bpm} BPM`;
@@ -203,8 +211,8 @@
                     }
                 }
             },
-            
-            adjustThreshold: function(newThreshold) {
+
+            adjustThreshold: function (newThreshold) {
                 this.peakThreshold = newThreshold;
             }
         };
@@ -299,9 +307,20 @@
             const wavBlob = createWavBlob(recordedChunks, 1, 16000);
             const audioUrl = URL.createObjectURL(wavBlob);
 
+            // Generate filename with patient name if available
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+            let filename;
+            if (currentPatientName) {
+                // Clean the patient name for filename use
+                const cleanName = currentPatientName.replace(/[^a-zA-Z0-9-_]/g, '_');
+                filename = `recording_${cleanName}_${timestamp}.wav`;
+            } else {
+                filename = `recording_${timestamp}.wav`;
+            }
+
             // Set up download
             downloadLink.href = audioUrl;
-            downloadLink.download = `recording_${new Date().toISOString().replace(/[:.]/g, '-')}.wav`;
+            downloadLink.download = filename;
             downloadLink.style.display = 'inline-block';
 
             // Enable upload
@@ -369,7 +388,6 @@
             uploadBtn.disabled = true;
             uploadBtn.textContent = "Uploading...";
 
-
             const firebaseConfig = {
                 apiKey: "AIzaSyBt5XCrUZd2QnO0No4aoUcTkLsTw3zPl2A",
                 authDomain: "remote-stethoscope.firebaseapp.com",
@@ -386,21 +404,38 @@
             }
 
             try {
+                // Generate filename with patient name if available
+                const timestamp = Date.now();
+                let filename;
+                if (currentPatientName) {
+                    // Clean the patient name for filename use
+                    const cleanName = currentPatientName.replace(/[^a-zA-Z0-9-_]/g, '_');
+                    filename = `recording_${cleanName}_${timestamp}.wav`;
+                } else {
+                    filename = `recording_${timestamp}.wav`;
+                }
+
                 // 1. Upload .wav to Firebase Storage
-                const filename = `recording_${Date.now()}.wav`;
                 const storageRef = firebase.storage().ref(`recordings/${filename}`);
                 await storageRef.put(wavBlob);
 
                 // 2. Save metadata to Firestore
                 const downloadURL = await storageRef.getDownloadURL();
-                await firebase.firestore().collection("recordings").add({
+                const recordingData = {
                     filename,
                     downloadURL,
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                     duration: 10,
                     size: wavBlob.size,
-                    heartRate: heartRateDetector.bpm || null // Include heart rate with recording
-                });
+                    heartRate: heartRateDetector.bpm || null
+                };
+
+                // Add patient name if available
+                if (currentPatientName) {
+                    recordingData.patientName = currentPatientName;
+                }
+
+                await firebase.firestore().collection("recordings").add(recordingData);
 
                 uploadBtn.textContent = "Uploaded!";
             } catch (error) {
@@ -413,80 +448,114 @@
                 }, 2000);
             }
         }
+
         const filterSettings = {
-            lowCutoff: 20,
-            highCutoff: 50,
-            sampleRate: 16000
-        };
-        class HeartSoundFilter {
-            constructor() {
-                this.reset();
-                this.calculateCoefficients();
-            }
+    lowCutoff: 20,
+    highCutoff: 65,
+    sampleRate: 16000
+};
 
-            reset() {
-                this.x1 = 0; this.x2 = 0;
-                this.y1 = 0; this.y2 = 0;
-            }
+class BiquadFilter {
+    constructor() {
+        this.reset();
+    }
 
-            calculateCoefficients() {
-                const { lowCutoff, highCutoff, sampleRate } = filterSettings;
-                const nyquist = sampleRate / 2;
-                const low = lowCutoff / nyquist;
-                const high = highCutoff / nyquist;
-                const omega = Math.PI * (high + low);
-                const bandwidth = Math.PI * (high - low);
-                const alpha = Math.sin(bandwidth) / (2 * Math.SQRT2);
-                const cos_omega = Math.cos(omega);
+    reset() {
+        this.x1 = 0; this.x2 = 0;
+        this.y1 = 0; this.y2 = 0;
+    }
 
-                const b0 = alpha;
-                const b1 = 0;
-                const b2 = -alpha;
-                const a0 = 1 + alpha;
-                const a1 = -2 * cos_omega;
-                const a2 = 1 - alpha;
+    setCoefficients(b0, b1, b2, a0, a1, a2) {
+        // Normalize coefficients by a0
+        this.b0 = b0 / a0;
+        this.b1 = b1 / a0;
+        this.b2 = b2 / a0;
+        this.a1 = a1 / a0;
+        this.a2 = a2 / a0;
+    }
 
-                this.b0 = b0 / a0;
-                this.b1 = b1 / a0;
-                this.b2 = b2 / a0;
-                this.a0 = 1;
-                this.a1 = a1 / a0;
-                this.a2 = a2 / a0;
-            }
+    processSample(input) {
+        const output = this.b0 * input +
+                     this.b1 * this.x1 +
+                     this.b2 * this.x2 -
+                     this.a1 * this.y1 -
+                     this.a2 * this.y2;
 
-            processSample(input) {
-                const output = this.b0 * input +
-                    this.b1 * this.x1 +
-                    this.b2 * this.x2 -
-                    this.a1 * this.y1 -
-                    this.a2 * this.y2;
+        this.x2 = this.x1;
+        this.x1 = input;
+        this.y2 = this.y1;
+        this.y1 = output;
 
-                this.x2 = this.x1;
-                this.x1 = input;
-                this.y2 = this.y1;
-                this.y1 = output;
+        return output;
+    }
+}
 
-                return Math.max(-32768, Math.min(32767, output));
-            }
+class FourthOrderBandpassFilter {
+    constructor() {
+        this.stage1 = new BiquadFilter();
+        this.stage2 = new BiquadFilter();
+        this.calculateCoefficients();
+    }
 
-            processBuffer(inputArray) {
-                const output = new Int16Array(inputArray.length);
-                for (let i = 0; i < inputArray.length; i++) {
-                    output[i] = this.processSample(inputArray[i]);
-                }
-                return output;
-            }
+    reset() {
+        this.stage1.reset();
+        this.stage2.reset();
+    }
+
+    calculateCoefficients() {
+        const { lowCutoff, highCutoff, sampleRate } = filterSettings;
+        const nyquist = sampleRate / 2;
+        const low = lowCutoff / nyquist;
+        const high = highCutoff / nyquist;
+        const omega = Math.PI * (high + low);
+        const bandwidth = Math.PI * (high - low);
+        
+        // For fourth-order, we use a slightly different Q calculation
+        const Q = Math.sqrt(high * low) / (high - low);
+        const alpha = Math.sin(bandwidth) / (2 * Q);
+
+        const cos_omega = Math.cos(omega);
+
+        // Same coefficients for both stages (identical biquads)
+        const b0 = alpha;
+        const b1 = 0;
+        const b2 = -alpha;
+        const a0 = 1 + alpha;
+        const a1 = -2 * cos_omega;
+        const a2 = 1 - alpha;
+
+        this.stage1.setCoefficients(b0, b1, b2, a0, a1, a2);
+        this.stage2.setCoefficients(b0, b1, b2, a0, a1, a2);
+    }
+
+    processSample(input) {
+        // Cascade two biquad stages
+        const stage1Out = this.stage1.processSample(input);
+        const stage2Out = this.stage2.processSample(stage1Out);
+        
+        // Clamp to 16-bit range if needed
+        return Math.max(-32768, Math.min(32767, stage2Out));
+    }
+
+    processBuffer(inputArray) {
+        const output = new Int16Array(inputArray.length);
+        for (let i = 0; i < inputArray.length; i++) {
+            output[i] = this.processSample(inputArray[i]);
         }
-        const heartSoundFilter = new HeartSoundFilter();
-        function resetFilterState() {
-            heartSoundFilter.reset();
-        }
+        return output;
+    }
+}
 
-        function applyBandpassFilter(inputArray) {
-            // Convert ArrayBuffer to Int16Array if needed
-            const data = inputArray instanceof ArrayBuffer ? new Int16Array(inputArray) : inputArray;
-            return heartSoundFilter.processBuffer(data);
-        }
+const heartSoundFilter = new FourthOrderBandpassFilter();
+
+function resetFilterState() {
+    heartSoundFilter.reset();
+}
+
+function applyBandpassFilter(inputArray) {
+    const data = inputArray instanceof ArrayBuffer ? new Int16Array(inputArray) : inputArray;
+    return heartSoundFilter.processBuffer(data);
+}
         function applyVolume(inputArray, volume) {
             const output = new Int16Array(inputArray.length);
             const rampSamples = Math.min(100, inputArray.length);
@@ -518,7 +587,7 @@
             // Initialize BPM detector
             heartRateDetector.init();
 
-            const WS_URL = 'ws://192.168.187.90:8080';
+            const WS_URL = 'ws://192.168.117.6:8080';
             ws = new WebSocket(WS_URL);
             ws.binaryType = 'arraybuffer';
 
@@ -527,10 +596,10 @@
                     const int16Data = new Int16Array(event.data);
                     const processedData = useFilter ? applyBandpassFilter(int16Data) : int16Data;
                     let volumeApplied = applyVolume(processedData, currentVolume).buffer;
-                    
+
                     // Process audio for BPM detection
                     heartRateDetector.addSamples(processedData);
-                    
+
                     player.feed(processedData);
                     worker.postMessage(processedData);
 
