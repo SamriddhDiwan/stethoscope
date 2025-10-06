@@ -38,11 +38,36 @@
         background-color: #f0f0f0;
         border-radius: 5px;
     }
+    
+    #connectionForm {
+        background-color: #f8f8f8;
+        padding: 15px;
+        border-radius: 8px;
+        border: 1px solid #e0e0e0;
+        margin: 15px 0;
+    }
+    
+    #connectionForm input {
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    
+    #connectionForm label {
+        font-weight: bold;
+        margin-right: 5px;
+    }
 </style>
 
 <body>
     <h1>Stethoscope Client</h1>
     <p>Connect to WebSocket by pressing the [Connect] button first!</p>
+    <div id="connectionForm" style="margin: 20px 0;">
+        <label for="serverIP">Server IP Address:</label>
+        <input type="text" id="serverIP" placeholder="192.168.117.6" value="192.168.117.6" style="margin: 0 10px; padding: 5px;">
+        <label for="serverPort">Port:</label>
+        <input type="number" id="serverPort" placeholder="8080" value="8080" style="margin: 0 10px; padding: 5px; width: 80px;">
+    </div>
     <button id="connectBtn" class="button" onclick="connect()">Connect</button>
     <input type="range" max="200" value="1" min="0" id="range" onchange="changeVolume(event)" step="0.1">
     <button id="pauseBtn" class="button" onclick="pause()">Pause Playing</button>
@@ -573,6 +598,20 @@ function applyBandpassFilter(inputArray) {
         }
         // WebSocket connection
         window.connect = function connect() {
+            // Get IP and port from input fields
+            const serverIP = document.getElementById('serverIP').value.trim();
+            const serverPort = document.getElementById('serverPort').value.trim();
+            
+            // Validate inputs
+            if (!serverIP) {
+                alert('Please enter a server IP address');
+                return;
+            }
+            if (!serverPort) {
+                alert('Please enter a server port');
+                return;
+            }
+            
             connectBtn.disabled = true;
             pauseBtn.disabled = false;
             recordBtn.disabled = false;
@@ -587,7 +626,8 @@ function applyBandpassFilter(inputArray) {
             // Initialize BPM detector
             heartRateDetector.init();
 
-            const WS_URL = 'ws://192.168.117.6:8080';
+            const WS_URL = `ws://${serverIP}:${serverPort}`;
+            console.log(`Connecting to: ${WS_URL}`);
             ws = new WebSocket(WS_URL);
             ws.binaryType = 'arraybuffer';
 
