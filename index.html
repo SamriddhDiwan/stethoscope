@@ -408,20 +408,45 @@
             }
         }
 
+        // Load Firebase config from environment variables or backend
+        async function getFirebaseConfig() {
+            try {
+                // Try to fetch config from backend endpoint (RECOMMENDED)
+                const response = await fetch('/api/firebase-config', {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('authToken')}`
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load Firebase config from backend');
+                }
+                
+                return await response.json();
+            } catch (error) {
+                console.error('Error loading Firebase config:', error);
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = "Upload not available";
+                return null;
+            }
+        }
+
         async function uploadToCloud() {
             const wavBlob = createWavBlob(recordedChunks, 1, 16000);
             uploadBtn.disabled = true;
             uploadBtn.textContent = "Uploading...";
 
-            const firebaseConfig = {
-                apiKey: "AIzaSyBt5XCrUZd2QnO0No4aoUcTkLsTw3zPl2A",
-                authDomain: "remote-stethoscope.firebaseapp.com",
-                projectId: "remote-stethoscope",
-                storageBucket: "remote-stethoscope.firebasestorage.app",
-                messagingSenderId: "278785615905",
-                appId: "1:278785615905:web:3e0fdd05539af815335b60",
-                measurementId: "G-5G99972VC9"
-            };
+            // Get Firebase config from backend (NOT hardcoded)
+            const firebaseConfig = await getFirebaseConfig();
+            
+            if (!firebaseConfig) {
+                uploadBtn.textContent = "Upload Failed";
+                setTimeout(() => {
+                    uploadBtn.textContent = "Upload to Cloud";
+                    uploadBtn.disabled = false;
+                }, 2000);
+                return;
+            }
 
             // Initialize Firebase (only once)
             if (!firebase.apps.length) {
